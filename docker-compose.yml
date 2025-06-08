@@ -1,9 +1,30 @@
 services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    command: ["--config", "/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4318:4318"    # OTLP HTTP
+      - "55681:55681"  # OTLP gRPC
+
   dice-roller:
     image: denoland/deno:2.3.5
     container_name: dice-roller
     ports:
       - "8000:8000"
-    command: deno run --allow-net --allow-env app/main.ts
+    command: deno run --unstable-otel --allow-net --allow-env app/main.ts
     volumes:
       - ./:/app
+    environment:
+      OTEL_DENO: true
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_RESOURCE_ATTRIBUTES: "service.name=dice-roller,service.version=1.0.0"
+    depends_on:
+      - otel-collector
+
+networks:
+  default:
+    name: otel-network
